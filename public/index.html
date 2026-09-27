@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dò tìm Camera IP — Hikvision</title>
+    <link rel="stylesheet" href="styles.css?v=3" />
+    <script>
+      // Dat theme TRUOC khi trang duoc ve, tranh nhay mau khi tai lai.
+      (() => {
+        let t;
+        try { t = localStorage.getItem('find-ip-device:theme'); } catch {}
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">◉</span>
+        <div>
+          <h1>Dò tìm Camera IP</h1>
+          <p class="sub">Quét LAN · Xem trực tiếp trên web</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="conn" id="connState"><span class="dot"></span><span>Đang kết nối…</span></div>
+        <button id="themeBtn" class="icon-btn" type="button" title="Đổi giao diện sáng/tối" aria-label="Đổi giao diện sáng/tối">
+          <span id="themeIcon">🌙</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="panel controls">
+      <div class="field">
+        <label for="ifaceSelect">Card mạng</label>
+        <select id="ifaceSelect"></select>
+      </div>
+      <div class="field">
+        <label for="vendorSelect">Hãng Camera</label>
+        <select id="vendorSelect">
+          <option value="hikvision">Hikvision</option>
+        </select>
+      </div>
+
+      <div class="field grow">
+        <label for="portsInput">Cổng cần dò</label>
+        <input id="portsInput" type="text" spellcheck="false" />
+      </div>
+      <div class="actions">
+        <button id="scanBtn" class="primary">Bắt đầu quét</button>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><span class="num" id="statTotal">0</span><span class="lbl">Thiết bị</span></div>
+      <div class="stat hik"><span class="num" id="statHik">0</span><span class="lbl">Hikvision</span></div>
+      <div class="stat cam"><span class="num" id="statCam">0</span><span class="lbl">Nghi ngờ camera</span></div>
+      <div class="stat"><span class="num" id="statNormal">0</span><span class="lbl">Thiết bị thường</span></div>
+
+    </section>
+
+    <section class="progress-wrap" id="progressWrap" hidden>
+      <div class="progress"><div class="bar" id="progressBar"></div></div>
+      <div class="progress-meta">
+        <span id="progressText">—</span>
+        <span id="progressPhase"></span>
+      </div>
+    </section>
+
+    <p class="status-line" id="statusLine" hidden></p>
+
+    <section class="panel">
+      <div class="table-head">
+        <h3>Thiết bị tìm thấy</h3>
+        <div class="filters">
+          <button class="chip active" data-filter="all">Tất cả</button>
+          <button class="chip" data-filter="camera">Camera</button>
+          <button class="chip" data-filter="normal">Thiết bị thường</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="deviceTable">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Cổng mở</th>
+              <th>Loại</th>
+              <th>Thông tin</th>
+              <th class="right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="deviceBody"></tbody>
+        </table>
+        <p class="empty" id="emptyState">Chưa có dữ liệu. Nhấn <strong>Bắt đầu quét</strong> để dò mạng.</p>
+      </div>
+    </section>
+
+    <!-- Popup nhập tài khoản (Bước 2) -->
+    <div class="modal" id="credModal" hidden>
+      <div class="modal-box">
+        <header>
+          <h3>Tài khoản camera <span id="credIp" class="mono"></span></h3>
+          <button class="close" data-close="credModal">✕</button>
+        </header>
+        <form id="credForm">
+          <label>Tên đăng nhập<input name="username" value="admin" autocomplete="off" required /></label>
+          <label>Mật khẩu<input name="password" type="password" autocomplete="off" /></label>
+          <div class="row">
+            <label>Cổng HTTP<input name="httpPort" type="number" value="80" min="1" max="65535" /></label>
+            <label>Cổng RTSP<input name="rtspPort" type="number" value="554" min="1" max="65535" /></label>
+          </div>
+          <label>Đường dẫn RTSP <span class="opt">(để trống nếu là Hikvision)</span>
+            <input name="rtspPath" placeholder="/cam/realmonitor?channel=%CH%&amp;subtype=%ST%" spellcheck="false" />
+          </label>
+          <label class="inline"><input type="checkbox" name="save" checked /> Ghi nhớ (mã hoá AES-256 trên máy chủ)</label>
+          <p class="hint">Hệ thống tự thử <code>/Streaming/Channels/101</code> rồi tới path đời cũ. Nhập đường dẫn riêng nếu camera không phải Hikvision (dùng <code>%CH%</code> = kênh, <code>%ST%</code> = main/sub).</p>
+          <p class="form-msg" id="credMsg"></p>
+          <div class="modal-actions">
+            <button type="button" class="ghost" data-close="credModal">Đóng</button>
+            <button type="submit" class="primary" id="credSubmit">Kết nối</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Popup xem video (Bước 3 + 4) -->
+    <div class="modal" id="videoModal" hidden>
+      <div class="modal-box wide">
+        <header>
+          <h3>Xem trực tiếp <span id="videoIp" class="mono"></span></h3>
+          <button class="close" data-close="videoModal">✕</button>
+        </header>
+        <div class="video-shell">
+          <video id="videoEl" playsinline muted autoplay></video>
+          <div class="video-overlay" id="videoOverlay"><span class="spinner"></span><span id="videoStatus">Đang kết nối…</span></div>
+        </div>
+        <div class="video-bar">
+          <div class="field small">
+            <label for="channelSelect">Kênh</label>
+            <select id="channelSelect"></select>
+          </div>
+          <div class="seg" id="streamToggle">
+            <button class="active" data-stream="main" title="Độ phân giải cao. Camera H.265 sẽ phải transcode nên tốn CPU.">Luồng chính</button>
+            <button data-stream="sub" title="Độ phân giải thấp, nhẹ máy. Thường là H.264 nên không phải transcode.">Luồng phụ</button>
+          </div>
+          <div class="video-stats mono" id="videoStats">—</div>
+          <div class="grow"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="player.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

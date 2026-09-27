@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kiểm tra trình duyệt — find-ip-device</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0; padding: 24px 20px 60px;
+        font: 15px/1.6 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+        background: #0d1117; color: #e6edf3;
+        max-width: 760px; margin-inline: auto;
+      }
+      @media (prefers-color-scheme: light) { body { background: #f4f6f8; color: #1a1f26; } }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: #8b98a5; font-size: 13px; margin: 0 0 24px; }
+      .verdict { padding: 16px 18px; border-radius: 12px; font-size: 17px; font-weight: 600; margin: 20px 0; border: 2px solid; }
+      .verdict.pass { border-color: #3fb950; color: #3fb950; }
+      .verdict.fail { border-color: #f85149; color: #f85149; }
+      .verdict.wait { border-color: #d29922; color: #d29922; }
+      .verdict small { display: block; font-weight: 400; font-size: 13px; margin-top: 6px; opacity: .85; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      td { padding: 7px 0; border-bottom: 1px solid rgba(139,152,165,.25); vertical-align: top; font-size: 13px; }
+      td:first-child { color: #8b98a5; width: 58%; }
+      .ok { color: #3fb950; } .no { color: #f85149; }
+      code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+      .ua { word-break: break-all; color: #8b98a5; font-size: 12px; margin-top: 20px; }
+      video { width: 160px; border-radius: 8px; background: #000; margin-top: 8px; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #8b98a5; margin: 28px 0 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Trình duyệt này xem được camera không?</h1>
+    <p class="sub">
+      Trang tự kiểm tra: nạp thật một đoạn fMP4 H.264 vào Media Source Extensions và đếm số khung
+      hình giải mã được. Không cần camera, không cần mật khẩu.
+    </p>
+
+    <div class="verdict wait" id="verdict">Đang kiểm tra…</div>
+
+    <h2>Chi tiết</h2>
+    <table id="rows"></table>
+
+    <video id="v" muted playsinline></video>
+
+    <p class="ua" id="ua"></p>
+
+    <script>
+      const CLIP_B64 = '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';
+
+      const rows = document.getElementById('rows');
+      const row = (k, v, cls) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${k}</td><td class="${cls || ''}">${v}</td>`;
+        rows.append(tr);
+      };
+      const yn = (b) => (b ? ['có', 'ok'] : ['KHÔNG', 'no']);
+
+      const verdict = (cls, text, sub) => {
+        const el = document.getElementById('verdict');
+        el.className = 'verdict ' + cls;
+        el.innerHTML = text + (sub ? `<small>${sub}</small>` : '');
+      };
+
+      document.getElementById('ua').textContent = navigator.userAgent;
+
+      const CODECS = ['avc1.42c01e', 'avc1.42c01f', 'avc1.4d401f', 'avc1.64001f'];
+
+      (async () => {
+        const hasMse = typeof window.MediaSource !== 'undefined';
+        row('MediaSource (MSE)', ...(([t, c]) => [t, c])(yn(hasMse)));
+        row('ManagedMediaSource (Safari iOS 17.1+)', ...(([t, c]) => [t, c])(yn(typeof window.ManagedMediaSource !== 'undefined')));
+        row('WebSocket', ...(([t, c]) => [t, c])(yn(typeof window.WebSocket !== 'undefined')));
+
+        if (!hasMse) {
+          verdict('fail', 'Không xem được video', 'Trình duyệt không có Media Source Extensions.');
+          return;
+        }
+
+        let anyCodec = false;
+        for (const c of CODECS) {
+          const ok = MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`);
+          anyCodec = anyCodec || ok;
+          row(`MSE hỗ trợ <code>${c}</code>`, ...(([t, cl]) => [t, cl])(yn(ok)));
+        }
+
+        if (!anyCodec) {
+          verdict('fail', 'Không xem được video',
+            'API MSE có nhưng không giải mã được H.264. Trên Linux thường là do thiếu gói <code>gstreamer1.0-libav</code>.');
+          return;
+        }
+
+        // Phep thu THAT: nap clip vao MSE va dem khung hinh giai ma duoc.
+        // Chi kiem tra API la khong du - da gap truong hop API bao co ma decode van hong.
+        const bytes = Uint8Array.from(atob(CLIP_B64), (ch) => ch.charCodeAt(0));
+        const video = document.getElementById('v');
+        const ms = new MediaSource();
+        video.src = URL.createObjectURL(ms);
+
+        const result = await new Promise((resolve) => {
+          const timer = setTimeout(() => resolve({ ok: false, why: 'hết thời gian chờ' }), 10000);
+          ms.addEventListener('sourceopen', () => {
+            let sb;
+            try {
+              sb = ms.addSourceBuffer('video/mp4; codecs="avc1.42c01e"');
+            } catch (e) {
+              clearTimeout(timer);
+              return resolve({ ok: false, why: 'không tạo được SourceBuffer: ' + e.message });
+            }
+            video.addEventListener('error', () => {
+              clearTimeout(timer);
+              resolve({ ok: false, why: 'lỗi giải mã: ' + (video.error?.message || 'không rõ') });
+            });
+            sb.addEventListener('updateend', () => {
+              video.play().catch(() => {});
+              setTimeout(() => {
+                clearTimeout(timer);
+                const q = video.getVideoPlaybackQuality?.() || {};
+                resolve({
+                  ok: video.videoWidth > 0,
+                  w: video.videoWidth, h: video.videoHeight,
+                  frames: q.totalVideoFrames ?? null,
+                  corrupted: q.corruptedVideoFrames ?? null,
+                });
+              }, 2500);
+            });
+            try {
+              sb.appendBuffer(bytes);
+            } catch (e) {
+              clearTimeout(timer);
+              resolve({ ok: false, why: 'appendBuffer lỗi: ' + e.message });
+            }
+          });
+        });
+
+        row('Nạp clip thật vào MSE', result.ok ? 'THÀNH CÔNG' : 'THẤT BẠI', result.ok ? 'ok' : 'no');
+        if (result.ok) {
+          row('Kích thước giải mã được', `${result.w}×${result.h}`, 'ok');
+          if (result.frames !== null) row('Số khung hình đã decode', `${result.frames} (hỏng: ${result.corrupted})`, 'ok');
+          verdict('pass', '✓ Trình duyệt này xem được camera',
+            'Đã giải mã thật khung hình H.264 qua MSE. Tauri/Electron dùng webview này sẽ chạy được.');
+        } else {
+          row('Lý do', result.why || '—', 'no');
+          verdict('fail', '✗ Không xem được video',
+            'MSE báo hỗ trợ codec nhưng giải mã thất bại: ' + (result.why || '') +
+            '. Với webview này cần chuyển sang WebRTC (go2rtc / MediaMTX).');
+        }
+      })();
+    </script>
+  </body>
+</html>
